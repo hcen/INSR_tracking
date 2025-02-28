@@ -1,6 +1,14 @@
 library(tidyverse)
 library("readxl")
 library(matrixStats)
+library(scales)
+#install.packages("survival")
+#install.packages("lattice")
+#install.packages("ggplot2")
+#install.packages("Hmisc")
+library("Hmisc")
+library(ggrepel)
+library(ggbeeswarm)
 
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path)) ##Set working directory to where this file is.
 
@@ -46,17 +54,13 @@ IR.dc$subgroup <- factor(IR.dc$subgroup, levels=c("CAV1_0nM","CAV1_2nM","Clathri
 summary(IR.dc$subgroup)
 
 
-install.packages("survival")
-install.packages("lattice")
-install.packages("ggplot2")
-install.packages("Hmisc")
-library("Hmisc")
+
 ReplicateAverages <- IR.dc %>% 
   group_by(subgroup, cell) %>%  
   summarise_each(funs(mean))
 view(ReplicateAverages)
 ggplot(IR.dc, aes(x=subgroup,y=Diffusion_coeff,color=factor(cell))) + 
-  labs(x=" ", y="Diffusion coefficient (µm2/s)")+
+  labs(x=" ", y="Diffusion coefficient (Âµm2/s)")+
   #geom_beeswarm(cex=0.1,alpha=0.2,groupOnX=TRUE,size=1) + 
   geom_jitter(position=position_jitter(0.2),alpha=0.5,size=1) + 
   scale_colour_brewer(palette = "Set3",name="cells") + 
@@ -82,7 +86,7 @@ ReplicateAverages <- IR.dc.i %>%
   summarise_each(funs(mean))
 view(ReplicateAverages)
 ggplot(IR.dc.i, aes(x=coexp,y=Diffusion_coeff,color=factor(cell))) + 
-  labs(x=" ", y="Diffusion coefficient (µm2/s)")+
+  labs(x=" ", y="Diffusion coefficient (Âµm2/s)")+
   
   geom_beeswarm(cex=1.2,alpha=0.5,groupOnX=TRUE,size=1) + 
   #geom_jitter(position=position_jitter(0.2),alpha=0.5,size=1) + 
@@ -118,7 +122,7 @@ IR.ins <- rbind(ins.0nM,ins.2nM)
 ggplot(IR.ins, aes(x=Diffusion_coeff, y=cum_frequency,color= Insulin)) +
   geom_line() +  
   #geom_line(data=ins.2nM, color= "cyan")+
-  xlab("Diffusion coefficient (µm2/s)") + ylab("Cumulative probability") +theme_classic()+
+  xlab("Diffusion coefficient (Âµm2/s)") + ylab("Cumulative probability") +theme_classic()+
   
   scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
                 labels = trans_format("log10", math_format(10^.x))) +
@@ -145,7 +149,7 @@ IR.CC <- rbind(ins.CAV1,ins.Clath)
 ggplot(IR.CC, aes(x=Diffusion_coeff, y=cum_frequency,color= coexp)) +
   geom_line() +  
   #geom_line(data=ins.2nM, color= "cyan")+
-  xlab("Diffusion coefficient (µm2/s)") + ylab("Cumulative probability") +theme_classic()+
+  xlab("Diffusion coefficient (Âµm2/s)") + ylab("Cumulative probability") +theme_classic()+
   
   scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
                 labels = trans_format("log10", math_format(10^.x))) +
@@ -178,11 +182,42 @@ ins.Clath.2nM <- IR.dc[c(IR.dc$subgroup=="Clathrin_2nM"),] %>%
 ins.Clath.2nM <- ins.Clath.2nM %>% mutate(cum_frequency=cumsum(freq)/nrow(ins.Clath.2nM))
 
 IR.CCins <- rbind(ins.CAV1.0nM,ins.CAV1.2nM,ins.Clath.0nM,ins.Clath.2nM)
+View(IR.CCins)
 
+str(IR.CCins)
+
+# Calculate medians for each subgroup
+medians <- IR.CCins %>%
+  group_by(subgroup) %>%
+  dplyr::summarize(median_value = median(Diffusion_coeff, na.rm = TRUE))
+
+
+ggplot(IR.CCins, aes(x=Diffusion_coeff, y=cum_frequency, color=subgroup)) +
+  geom_line() +  
+  xlab("Diffusion coefficient (Âµm2/s)") + 
+  ylab("Cumulative probability") + 
+  theme_classic() +
+  scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
+                labels = trans_format("log10", math_format(10^.x))) +
+  annotation_logticks(sides="b") +
+  coord_cartesian(xlim=c(10^(-2), 10^1.5)) +
+  theme(legend.position="right", legend.title = element_blank(), aspect.ratio = 1/1.1) +
+  #stat_summary(aes(x=Diffusion_coeff, y=cum_frequency, color=subgroup),
+  #             fun = median, geom = "point", size = 3) +  # larger dot for median
+  geom_point(data=medians, aes(x=median_value, y=0.5), size=2, ) +  # larger point for median
+  geom_text_repel(data=medians, 
+                  aes(x=median_value, y=0.5, 
+                      label=round(median_value, 3), 
+                      color=subgroup), 
+                  size=4, vjust=-1, show.legend = FALSE)  # label for median value
+
+ggsave(filename="figure/diffusion_CCins_median.svg",width=4.5,height=3,units="in",device = svg)
+
+# older plot
 ggplot(IR.CCins, aes(x=Diffusion_coeff, y=cum_frequency,color= subgroup)) +
   geom_line() +  
   #geom_line(data=ins.2nM, color= "cyan")+
-  xlab("Diffusion coefficient (µm2/s)") + ylab("Cumulative probability") +theme_classic()+
+  xlab("Diffusion coefficient (Âµm2/s)") + ylab("Cumulative probability") +theme_classic()+
   
   scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
                 labels = trans_format("log10", math_format(10^.x))) +
@@ -259,10 +294,12 @@ IR.speed.i <- IR.speed.i %>%dplyr::rename(Track='Track #',Start_frames='Start (f
                                           Track_radius="Search radius (px)",Min_disp_px="Min. disp. (px)",Max_disp_px="Max. disp. (px)",
                                           Avg_disp_px="Avg. disp. (px)" ) %>% 
   mutate(subgroup=paste(coexp,Insulin,sep = "_"),Lifetime=Duration_frames*2) %>% filter(Duration_frames>4)
-
+nrow(IR.speed.i)
 IR.speed$subgroup <- factor(IR.speed$subgroup, levels=c("CAV1_0nM","CAV1_2nM","Clathrin_0nM", "Clathrin_2nM"))
 summary(IR.speed$subgroup)
 
+IR.speed.i$subgroup <- factor(IR.speed.i$subgroup, levels=c("CAV1_0nM","CAV1_2nM","Clathrin_0nM", "Clathrin_2nM"))
+summary(IR.speed.i$subgroup)
 #
 
 ReplicateAverages <- IR.speed %>% 
@@ -272,8 +309,9 @@ view(ReplicateAverages)
 
 # track radius
 ggplot(IR.speed, aes(x=subgroup,y=Track_radius,color=factor(cell))) + 
-  labs(x=" ", y="Track radius (µm)")+
-  #geom_beeswarm(cex=0.1,alpha=0.2,groupOnX=TRUE,size=1) + 
+  labs(x=" ", y="Track radius (Âµm)")+
+  geom_violin(color="grey30",trim=T)+
+  #geom_beeswarm(cex=0.1,alpha=0.2,,groupOnX=TRUE,size=1) + 
   geom_jitter(position=position_jitter(0.2),alpha=0.5,size=1) + 
   scale_colour_brewer(palette = "Set3",name="cells") + 
   geom_beeswarm(data=ReplicateAverages,cex=1.5,aes(colour=factor(cell)), size=3) + 
@@ -289,10 +327,12 @@ ggplot(IR.speed, aes(x=subgroup,y=Track_radius,color=factor(cell))) +
         axis.text.y=element_text(size=10,colour="black"),
         axis.title.x=element_text(size=10),
         axis.title.y=element_text(size=10)) #4.5 x 3.5 in
-
-ggsave(filename="radius_CCins_super.png",width=5.5,height=3,units="in",dpi=600)
+#aspect.ratio = 1/1.1
+ggsave(filename="figure/radius_CCins_super_new.png",width=3.5,height=3,units="in",dpi=600)
 
 #
+
+#library(ggpubr)
 ReplicateAverages <- IR.speed.i %>% 
   group_by(coexp, cell) %>%  
   summarise_each(funs(mean))
@@ -306,7 +346,7 @@ ggplot(IR.speed.i, aes(x=coexp,y=Lifetime,color=factor(cell))) +
   scale_colour_brewer(palette = "Set3",name="cells") + 
   geom_beeswarm(data=ReplicateAverages,cex=4,aes(colour=factor(cell)), size=3) + 
   geom_beeswarm(data=ReplicateAverages,cex=4,shape = 1,size = 3,colour = "black")+
-  stat_compare_means(data=ReplicateAverages, comparisons = list(c("CAV1", "Clathrin")), method="t.test", paired=FALSE) + 
+  #stat_compare_means(data=ReplicateAverages, comparisons = list(c("CAV1", "Clathrin")), method="t.test", paired=FALSE) + 
   # stat_summary(fun.data=mean_sdl, fun.args = list(mult=1),  geom="errorbar", color="red", width=0.5)+
   #scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
   #              labels = trans_format("log10", math_format(10^.x))) +
@@ -323,7 +363,7 @@ ggsave(filename="lifetime_CC_super.png",width=3.5,height=3.5,units="in",dpi=600)
 
 # Track radius
 ggplot(IR.speed.i, aes(x=coexp,y=Track_radius,color=factor(cell))) + 
-  labs(x=" ", y="Track radius (µm)")+
+  labs(x=" ", y="Track radius (Âµm)")+
   
   geom_beeswarm(cex=1.2,alpha=0.5,groupOnX=TRUE,size=1) + 
   #geom_jitter(position=position_jitter(0.2),alpha=0.5,size=1) + 
@@ -360,7 +400,7 @@ IR.ins <- rbind(ins.0nM,ins.2nM)
 ggplot(IR.ins, aes(x=Track_radius, y=cum_frequency,color= Insulin)) +
   geom_line() +  
   #geom_line(data=ins.2nM, color= "cyan")+
-  xlab("Track radius (µm)") + ylab("Cumulative probability") +theme_classic()+
+  xlab("Track radius (Âµm)") + ylab("Cumulative probability") +theme_classic()+
   
   scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
                 labels = trans_format("log10", math_format(10^.x))) +
@@ -387,7 +427,7 @@ IR.CC <- rbind(ins.CAV1,ins.Clath)
 ggplot(IR.CC, aes(x=Track_radius, y=cum_frequency,color= coexp)) +
   geom_line() +  
   #geom_line(data=ins.2nM, color= "cyan")+
-  xlab("Track radius (µm)") + ylab("Cumulative probability") +theme_classic()+
+  xlab("Track radius (Âµm)") + ylab("Cumulative probability") +theme_classic()+
   
   scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
                 labels = trans_format("log10", math_format(10^.x))) +
@@ -421,10 +461,40 @@ ins.Clath.2nM <- ins.Clath.2nM %>% mutate(cum_frequency=cumsum(freq)/nrow(ins.Cl
 
 IR.CCins <- rbind(ins.CAV1.0nM,ins.CAV1.2nM,ins.Clath.0nM,ins.Clath.2nM)
 
+View(IR.CCins)
+
+# Calculate medians for each subgroup
+medians <- IR.CCins %>%
+  group_by(subgroup) %>%
+  dplyr::summarize(median_value = median(Track_radius, na.rm = TRUE))
+
+
+ggplot(IR.CCins, aes(x=Track_radius, y=cum_frequency, color=subgroup)) +
+  geom_line() +  
+  xlab("Track radius (Âµm)") + 
+  ylab("Cumulative probability") + 
+  theme_classic() +
+  scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
+                labels = trans_format("log10", math_format(10^.x))) +
+  annotation_logticks(sides="b") +
+  coord_cartesian(xlim=c(10^(-0.5),10^1.5))+
+  theme(legend.position="right", legend.title = element_blank(), aspect.ratio = 1/1.1) +
+  #stat_summary(aes(x=Diffusion_coeff, y=cum_frequency, color=subgroup),
+  #             fun = median, geom = "point", size = 3) +  # larger dot for median
+  geom_point(data=medians, aes(x=median_value, y=0.5), size=2, ) +  # larger point for median
+  geom_text_repel(data=medians, 
+                  aes(x=median_value, y=0.5, 
+                      label=round(median_value, 2), 
+                      color=subgroup), 
+                  size=4, vjust=-1, show.legend = FALSE)  # label for median value
+
+ggsave(filename="figure/radius_CCins_median.svg",width=4.5,height=3,units="in",device = svg)
+
+# older plot
 ggplot(IR.CCins, aes(x=Track_radius, y=cum_frequency,color= subgroup)) +
   geom_line() +  
   #geom_line(data=ins.2nM, color= "cyan")+
-  xlab("Track radius (µm)") + ylab("Cumulative probability") +theme_classic()+
+  xlab("Track radius (Âµm)") + ylab("Cumulative probability") +theme_classic()+
   
   scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
                 labels = trans_format("log10", math_format(10^.x))) +
@@ -459,6 +529,7 @@ view(ReplicateAverages)
 ggplot(IR.speed, aes(x=subgroup,y=Lifetime,color=factor(cell))) + 
   labs(x=" ", y="Lifetime (s)")+
   #geom_beeswarm(cex=0.1,alpha=0.2,groupOnX=TRUE,size=1) + 
+  geom_violin(color="grey30",trim=T)+
   geom_jitter(position=position_jitter(0.2),alpha=0.5,size=1) + 
   scale_colour_brewer(palette = "Set3",name="cells") + 
   geom_beeswarm(data=ReplicateAverages,cex=1.5,aes(colour=factor(cell)), size=3) + 
@@ -489,7 +560,7 @@ IR.CC <- rbind(ins.CAV1,ins.Clath)
 ggplot(IR.CC, aes(x=Lifetime, y=cum_frequency,color= coexp)) +
   geom_line() +  
   #geom_line(data=ins.2nM, color= "cyan")+
-  xlab("Track radius (µm)") + ylab("Cumulative probability") +theme_classic()+
+  xlab("Track radius (Âµm)") + ylab("Cumulative probability") +theme_classic()+
   
   scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
                 labels = trans_format("log10", math_format(10^.x))) +
@@ -523,18 +594,32 @@ ins.Clath.2nM <- ins.Clath.2nM %>% mutate(cum_frequency=cumsum(freq)/nrow(ins.Cl
 
 IR.CCins <- rbind(ins.CAV1.0nM,ins.CAV1.2nM,ins.Clath.0nM,ins.Clath.2nM)
 
+# Calculate medians for each subgroup
+
+medians <- IR.CCins %>%
+  group_by(subgroup) %>%
+  dplyr::summarize(median_value = median(Lifetime, na.rm = TRUE))
+
+
+
 ggplot(IR.CCins, aes(x=Lifetime, y=cum_frequency,color= subgroup)) +
   geom_line() +  
   #geom_line(data=ins.2nM, color= "cyan")+
   xlab("Lifetime (s)") + ylab("Cumulative probability") +theme_classic()+
   
-  scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
-                labels = trans_format("log10", math_format(10^.x))) +
-  annotation_logticks(sides="b")+  # "lrtb"
-  coord_cartesian(xlim=c(10^(1),10^2.5))+
-  theme(legend.position="right",legend.title = element_blank(),aspect.ratio = 1/1.1)
+  #scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
+  #              labels = trans_format("log10", math_format(10^.x))) +
+  #annotation_logticks(sides="b")+  # "lrtb"
+  #coord_cartesian(xlim=c(10^(1),10^2.5))+
+  theme(legend.position="right",legend.title = element_blank(),aspect.ratio = 1/1.1) +
+  geom_point(data=medians, aes(x=median_value, y=0.5), size=2, ) +  # larger point for median
+  geom_text_repel(data=medians, 
+                  aes(x=median_value, y=0.5, 
+                      label=round(median_value, 2), 
+                      color=subgroup), 
+                  size=4, vjust=-1, show.legend = FALSE)  # label for median value
 
-ggsave(filename="Lifetime_CCins.png",width=4.5,height=3,units="in",dpi=600)
+ggsave(filename="figure/Lifetime_CCins_median.svg",width=4.5,height=3,device=svg)
 
 ks.test(x=ins.CAV1.2nM$Lifetime, y=ins.CAV1.0nM$Lifetime,
         alternative = c("two.sided"),
@@ -551,6 +636,10 @@ ks.test(x=ins.CAV1.0nM$Lifetime, y=ins.Clath.0nM$Lifetime,
 ks.test(x=ins.CAV1.2nM$Lifetime, y=ins.Clath.2nM$Lifetime,
         alternative = c("two.sided"),
         exact = NULL) # D = 0.080543, p-value = 0.518
+
+ks.test(x=ins.CAV1.2nM$Lifetime, y=ins.Clath.0nM$Lifetime,
+        alternative = c("two.sided"),
+        exact = NULL) # D = 0.1706, p-value = 3.881e-06
 
 #=========================================================
 # paired tracks
@@ -708,7 +797,7 @@ view(ReplicateAverages)
 
 # track radius
 ggplot(IR.speed, aes(x=subgroup,y=Track_radius,color=factor(cell))) + 
-  labs(x=" ", y="Track radius (µm)")+
+  labs(x=" ", y="Track radius (Âµm)")+
   #geom_beeswarm(cex=0.1,alpha=0.2,groupOnX=TRUE,size=1) + 
   geom_jitter(position=position_jitter(0.2),alpha=0.5,size=1) + 
   scale_colour_brewer(palette = "Set3",name="cells") + 
@@ -751,7 +840,7 @@ stat
 stat<- stat %>% add_xy_position(x = "coexp.pair")
 
 ggplot(IR.speed.iPN, aes(x=coexp.pair,y=Track_radius,color=factor(cell))) + 
-  labs(x=" ", y="Track radius (µm)")+
+  labs(x=" ", y="Track radius (Âµm)")+
   
   geom_beeswarm(cex=0.9,alpha=0.5,groupOnX=TRUE,size=1) + 
   #geom_jitter(position=position_jitter(0.2),alpha=0.5,size=1) + 
@@ -789,7 +878,7 @@ IR.ins <- rbind(ins.0nM,ins.2nM)
 ggplot(IR.ins, aes(x=Track_radius, y=cum_frequency,color= Insulin)) +
   geom_line() +  
   #geom_line(data=ins.2nM, color= "cyan")+
-  xlab("Track radius (µm)") + ylab("Cumulative probability") +theme_classic()+
+  xlab("Track radius (Âµm)") + ylab("Cumulative probability") +theme_classic()+
   
   scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
                 labels = trans_format("log10", math_format(10^.x))) +
@@ -816,7 +905,7 @@ IR.CC <- rbind(ins.CAV1,ins.Clath)
 ggplot(IR.CC, aes(x=Track_radius, y=cum_frequency,color= coexp)) +
   geom_line() +  
   #geom_line(data=ins.2nM, color= "cyan")+
-  xlab("Track radius (µm)") + ylab("Cumulative probability") +theme_classic()+
+  xlab("Track radius (Âµm)") + ylab("Cumulative probability") +theme_classic()+
   
   scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
                 labels = trans_format("log10", math_format(10^.x))) +
@@ -853,7 +942,7 @@ IR.CCins <- rbind(ins.CAV1.0nM,ins.CAV1.2nM,ins.Clath.0nM,ins.Clath.2nM)
 ggplot(IR.CCins, aes(x=Track_radius, y=cum_frequency,color= subgroup)) +
   geom_line() +  
   #geom_line(data=ins.2nM, color= "cyan")+
-  xlab("Track radius (µm)") + ylab("Cumulative probability") +theme_classic()+
+  xlab("Track radius (Âµm)") + ylab("Cumulative probability") +theme_classic()+
   
   scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
                 labels = trans_format("log10", math_format(10^.x))) +
@@ -891,7 +980,7 @@ ReplicateAverages.clath <- IR.speed.iPN.clath %>%
   summarise_each(funs(mean))
 
 ggplot(IR.speed.iPN.cav, aes(x=coexp.pair,y=Track_radius,color=factor(cell))) + 
-  labs(x=" ", y="Track radius (µm)")+
+  labs(x=" ", y="Track radius (Âµm)")+
   
   geom_beeswarm(cex=0.9,alpha=0.5,groupOnX=TRUE,size=1) + 
   #geom_jitter(position=position_jitter(0.2),alpha=0.5,size=1) + 
@@ -916,7 +1005,7 @@ ggplot(IR.speed.iPN.cav, aes(x=coexp.pair,y=Track_radius,color=factor(cell))) +
 ggsave(filename="pairYN_radius_CAV1_super.png",width=3.5,height=3.5,units="in",dpi=600)
 #
 ggplot(IR.speed.iPN.clath, aes(x=coexp.pair,y=Track_radius,color=factor(cell))) + 
-  labs(x=" ", y="Track radius (µm)")+
+  labs(x=" ", y="Track radius (Âµm)")+
   
   geom_beeswarm(cex=0.9,alpha=0.5,groupOnX=TRUE,size=1) + 
   #geom_jitter(position=position_jitter(0.2),alpha=0.5,size=1) + 
@@ -961,7 +1050,7 @@ IR.cav <- rbind(ins.CAV1.Y,ins.CAV1.N)
 ggplot(IR.cav, aes(x=Track_radius, y=cum_frequency,color= coexp.pair)) +
   geom_line() +  
   #geom_line(data=ins.2nM, color= "cyan")+
-  xlab("Track radius (µm)") + ylab("Cumulative probability") +theme_classic()+
+  xlab("Track radius (Âµm)") + ylab("Cumulative probability") +theme_classic()+
   
   scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
                 labels = trans_format("log10", math_format(10^.x))) +
@@ -980,7 +1069,7 @@ IR.clath <- rbind(ins.Clath.Y,ins.Clath.N)
 ggplot(IR.clath, aes(x=Track_radius, y=cum_frequency,color= coexp.pair)) +
   geom_line() +  
   #geom_line(data=ins.2nM, color= "cyan")+
-  xlab("Track radius (µm)") + ylab("Cumulative probability") +theme_classic()+
+  xlab("Track radius (Âµm)") + ylab("Cumulative probability") +theme_classic()+
   
   scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
                 labels = trans_format("log10", math_format(10^.x))) +
